@@ -234,7 +234,10 @@ class Quadtree:
         Returns True if it was present, False for an unknown id. Collapses internal
         nodes back into a leaf once their subtree holds capacity points or fewer.
 
-        Time complexity: O(depth) average, O(max_depth) worst case.
+        Time complexity: O(depth) average. Worst case O(max_depth + m), where m is
+        the size of the target leaf: the descent is bounded by max_depth, but the
+        leaf is then filtered in full. Coincident points pile up in one leaf at
+        max_depth, where m reaches n.
         """
         point = self._index.pop(point_id, None)
         if point is None:
@@ -281,7 +284,8 @@ class Quadtree:
         Returns True if the point existed. Bounds are checked before anything is
         removed, so a rejected move leaves the tree untouched.
 
-        Time complexity: O(depth) average, O(max_depth) worst case.
+        Time complexity: same as remove: O(depth) average, worst case
+        O(max_depth + m) for a target leaf of m points.
         """
         if point_id not in self._index:
             return False
@@ -303,6 +307,13 @@ class Quadtree:
         best point found so far, nothing left can improve on it and the search stops.
 
         Time complexity: O(log n) average for evenly spread points, O(n) worst case.
+
+        Two shapes hit the worst case. Coincident points pile into one leaf at
+        max_depth, which is then scanned in full. A query at the center of a ring of
+        equidistant points defeats pruning differently: every box holding ring points
+        straddles the query side of the ring, so its lower bound falls below the best
+        distance and none can be discarded. Measured on a ring of 8,000 points, a
+        single nearest query checked 7,998 of them.
         """
         if not self._index:
             return None
