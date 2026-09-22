@@ -19,6 +19,10 @@ DEFAULT_BENCHMARK_RADIUS_M = 5000
 
 def _download(center_lat: float, center_lon: float, radius_m: int) -> nx.MultiDiGraph:
     """Download the drivable network around a point from Overpass."""
+    # network_type="drive" already excludes access=private: osmnx interpolates
+    # settings.default_access ('["access"!~"private"]', settings.py:141) into the
+    # drive filter in _overpass._get_network_filter. Passing custom_filter here would
+    # replace the ["highway"] requirement and leave edges with no inferable speed.
     return ox.graph_from_point(
         (center_lat, center_lon),
         dist=radius_m,
