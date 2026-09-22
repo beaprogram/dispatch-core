@@ -7,24 +7,24 @@ name = "dispatch-core"
 version = "0.1.0"
 description = "Road graph dispatch system with quadtree routing and A* pathfinding"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 license = {text = "MIT"}
 authors = [
     {name = "Arup Halder", email = "aruphalder2526@gmail.com"}
 ]
 
 dependencies = [
-    "osmnx>=2.0",
+    "osmnx>=2.0,<3",
     "networkx>=3.0",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=7.0",
-    "pytest-cov>=4.0",
-    "hypothesis>=6.80",
-    "ruff>=0.4.0",
-    "mypy>=1.8",
+    "pytest>=7.0,<9",
+    "pytest-cov>=4.0,<6",
+    "hypothesis>=6.80,<7",
+    "ruff>=0.4.0,<1",
+    "mypy>=1.8,<3",
 ]
 
 [project.scripts]
@@ -38,7 +38,7 @@ packages = ["dispatch_core"]
 
 [tool.ruff]
 line-length = 100
-target-version = "py311"
+target-version = "py312"
 exclude = [
     ".git",
     ".venv",
@@ -68,7 +68,7 @@ ignore = [
 known-first-party = ["dispatch_core"]
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.12"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
