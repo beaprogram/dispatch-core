@@ -7,6 +7,7 @@ differently.
 """
 
 import math
+import random
 
 import pytest
 from hypothesis import given
@@ -483,3 +484,55 @@ def test_stats_accumulate_across_calls() -> None:
     tree.nearest(50.0, 0.0, stats=stats)
 
     assert stats.points_checked > after_first
+
+
+def test_nearest_checks_under_five_percent_of_ten_thousand_points() -> None:
+    """Guards against a quadtree that is correct but secretly scans everything.
+
+    The brute force property tests compare answers, so an implementation that
+    ignored its own structure and checked every point would still pass them all.
+    This asserts the work done, not the answer: with 10,000 uniform points a
+    nearest query must touch under 5 percent of them.
+    """
+    count = 10_000
+    rng = random.Random(20240922)
+    span = COORDINATE_LIMIT - 1
+
+    tree = Quadtree(TEST_BOUNDS)
+    for i in range(count):
+        tree.insert(i, rng.uniform(-span, span), rng.uniform(-span, span))
+
+    queries = 200
+    stats = SearchStats()
+    for _ in range(queries):
+        tree.nearest(rng.uniform(-span, span), rng.uniform(-span, span), stats=stats)
+
+    mean_points_checked = stats.points_checked / queries
+    budget = count * 0.05
+
+    assert mean_points_checked < budget, (
+        f"mean points_checked {mean_points_checked:.1f} per query is not under "
+        f"{budget:.0f} (5 percent of {count}); the search may be scanning"
+    )
+
+
+def test_invalid_max_depth_raises() -> None:
+    """A negative max_depth has no meaning."""
+    with pytest.raises(ValueError, match="max_depth"):
+        Quadtree(TEST_BOUNDS, max_depth=-1)
+
+
+def test_bounds_from_points_rejects_non_positive_margin() -> None:
+    """A zero margin would leave the extreme point on the excluded maximum edge."""
+    with pytest.raises(ValueError, match="margin must be positive"):
+        bounds_from_points([(0.0, 0.0)], margin=0.0)
+
+
+def test_contains_reports_membership() -> None:
+    """Membership by id is a constant time lookup."""
+    tree = Quadtree(TEST_BOUNDS)
+    tree.insert("courier-1", 0.0, 0.0)
+    assert "courier-1" in tree
+    assert "courier-2" not in tree
+    tree.remove("courier-1")
+    assert "courier-1" not in tree

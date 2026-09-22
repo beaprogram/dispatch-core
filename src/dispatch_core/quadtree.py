@@ -243,25 +243,22 @@ class Quadtree:
         self._remove_from(self._root, point)
         return True
 
-    def _remove_from(self, node: _Node, point: Point) -> bool:
-        """Remove point from this subtree, collapsing on the way back up."""
+    def _remove_from(self, node: _Node, point: Point) -> None:
+        """Remove point from this subtree, collapsing internal nodes on the way up.
+
+        remove() has already confirmed the id is stored and the point carries the
+        coordinates it was indexed under, so the descent always reaches it.
+        """
+        node.count -= 1
+
         if node.points is not None:
-            for i, candidate in enumerate(node.points):
-                if candidate.id == point.id:
-                    node.points.pop(i)
-                    node.count -= 1
-                    return True
-            return False
+            node.points = [held for held in node.points if held.id != point.id]
+            return
 
         assert node.children is not None
-        child = node.children[node.box.quadrant_index(point.x, point.y)]
-        if not self._remove_from(child, point):
-            return False
-
-        node.count -= 1
+        self._remove_from(node.children[node.box.quadrant_index(point.x, point.y)], point)
         if node.count <= self.capacity:
             self._collapse(node)
-        return True
 
     def _collapse(self, node: _Node) -> None:
         """Replace an internal node's subtree with a single leaf holding its points."""
