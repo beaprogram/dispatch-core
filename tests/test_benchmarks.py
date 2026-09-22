@@ -133,3 +133,35 @@ def test_format_paired_names_the_winner_and_margin() -> None:
     assert format_paired(4, 5, 20.3, LOWER_BETTER) == "topk-eta on 4/5, 20.30 s"
     assert format_paired(1, 5, -14.31, LOWER_BETTER) == "nearest on 4/5, 14.31 s"
     assert format_paired(0, 5, 0.0, LOWER_BETTER) == "tied on all 5"
+
+
+def test_projection_measurement_matches_the_documented_bound() -> None:
+    """The projection error claim in the README is reproducible."""
+    from benchmarks.bench_analysis import measure_projection_error
+
+    rows = measure_projection_error()
+    assert len(rows) == 1
+    assert rows[0]["measurement"] == "projection_worst_relative_error_pct"
+    assert 0.0 < float(rows[0]["value"]) < 0.02, (
+        "projection error drifted from the documented bound"
+    )
+
+
+def test_ring_measurement_shows_pruning_failing() -> None:
+    """The ring worst case claim in the README is reproducible."""
+    from benchmarks.bench_analysis import RING_SIZE, measure_ring_pathology
+
+    rows = {row["measurement"]: row["value"] for row in measure_ring_pathology()}
+    assert rows["ring_size"] == RING_SIZE
+    assert rows["ring_points_checked"] > 0.99 * RING_SIZE, (
+        "the ring no longer defeats pruning, so the documented worst case is stale"
+    )
+
+
+def test_analysis_rows_have_a_consistent_shape() -> None:
+    """Every analysis row must carry a name, a value, and an explanation."""
+    from benchmarks.bench_analysis import measure_projection_error, measure_ring_pathology
+
+    for row in [*measure_projection_error(), *measure_ring_pathology()]:
+        assert set(row) == {"measurement", "value", "detail"}
+        assert row["detail"], f"{row['measurement']} has no detail"

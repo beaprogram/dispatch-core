@@ -92,6 +92,19 @@ Latency is the wall clock time to choose a courier for one order.
 | nearest | 0.01 % | 0 | 1993 |
 | topk-eta | 24.75 % | 1024 | 3123 |
 
+### Per seed detail at the baseline
+
+Mean delivery for each seed separately. A single seed run reports whichever of
+these happens to come up.
+
+| seed | nearest | topk-eta | difference |
+| ---: | ---: | ---: | --- |
+| 42 | 1404.6 s | 1370.2 s | topk-eta better by 2.45 % |
+| 43 | 1535.5 s | 1551.8 s | topk-eta worse by 1.06 % |
+| 44 | 1426.1 s | 1379.6 s | topk-eta better by 3.26 % |
+| 45 | 1309.9 s | 1300.9 s | topk-eta better by 0.69 % |
+| 46 | 1492.2 s | 1464.4 s | topk-eta better by 1.87 % |
+
 ## Dispatch load sweep
 
 Courier count varied at the default arrival rate. Both strategies see identical
@@ -164,4 +177,40 @@ value for the rejected courier means the straight line understated its real rout
 | 100 | 3.44 % (min 2.70, max 4.60) | 46.6 s (min 35.9, max 63.7) | 0.2074 | 0.1048 |
 | 200 | 9.10 % (min 7.50, max 11.40) | 57.3 s (min 51.9, max 60.1) | 0.2690 | 0.1142 |
 | 400 | 32.22 % (min 30.80, max 33.40) | 38.1 s (min 32.5, max 42.4) | 0.3303 | 0.1182 |
+
+## Supporting measurements
+
+Produced by `python -m benchmarks.bench_analysis`. These are not performance
+benchmarks. Each exists so a factual claim in the README is reproducible.
+
+| field | value |
+| --- | --- |
+| cpu | Apple M4 |
+| machine | arm64 |
+| os | Darwin 27.0.0 |
+| python | 3.14.0 |
+| run_date | 2026-09-22 22:44 UTC |
+
+| measurement | value | detail |
+| --- | ---: | --- |
+| projection_worst_relative_error_pct | 0.0138 | 81 by 81 grid over a 5000 m radius |
+| ring_points_checked | 7998 | one nearest query at the centre of a 8000 point ring |
+| ring_size | 8000 | total points in the ring |
+| mean_distance_checks_per_query | 8.74 | 10000 uniform seeded points, 200 queries |
+| distance_checks_vs_scan_factor | 1144 | how many fewer distance checks than a linear scan |
+| graph_nodes | 3505 | full graph |
+| graph_edges | 8915 | full graph |
+| median_speed_kph | 41.15 | over all edges |
+| max_speed_kph | 90.0 | over all edges |
+| edges_at_max_speed | 1 | of 8915 edges |
+| max_over_median_speed | 2.19 | how loose the travel_time divisor is |
+| disagreements | 92 | of 1000 decisions |
+| disagreements_crossing_harbour | 4 | meridian -63.56 |
+| crossing_share_of_eta_saved_pct | 6.36 | share of total travel time saved |
+| worst_case_rejected_straight_m | 553 | largest single ETA saving, rejected courier |
+| worst_case_rejected_eta_s | 493 | largest single ETA saving, rejected courier |
+| worst_case_chosen_straight_m | 655 | largest single ETA saving, chosen courier |
+| worst_case_chosen_eta_s | 69 | largest single ETA saving, chosen courier |
+| top50_detour_pairs_crossing | 10 | of the 50 highest detour sampled pairs |
+| all_sampled_pairs_crossing_pct | 37.92 | of 1200 sampled pairs |
 

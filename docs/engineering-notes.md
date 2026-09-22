@@ -3,6 +3,12 @@
 Short factual records of bugs worth remembering and decisions that are not obvious
 from the code. Numbers here come from a test or benchmark run in this repo.
 
+Each note records what was measured at the checkpoint it describes, so some values
+predate the benchmark suite added in CP5 and were taken on a single seed from a
+one-off script. Where a number also appears in `benchmarks/results/RESULTS.md`, that
+file is authoritative: it is regenerated from committed CSVs, uses five seeds, and is
+reproducible with `make bench`. Single seed values below are labelled as such.
+
 ## Equirectangular projection was off by a factor of about 57 (CP1)
 
 `project_to_local` multiplied raw degree offsets by the earth radius without first
@@ -158,7 +164,9 @@ used and on time percentage is neither a trivial 100 nor a collapse.
 
 ## The route cache only helps one of the two strategies (CP4)
 
-Measured on the default run, full graph, 1000 orders, 200 couriers, seed 42:
+Measured on the default run, full graph, 1000 orders, 200 couriers, seed 42 only.
+`RESULTS.md` reports the five seed means, 0.01 percent and 24.75 percent, and is the
+figure to quote:
 
 | strategy | cache hits | cache misses | hit rate |
 | --- | --- | --- | --- |
@@ -182,12 +190,19 @@ far side of Halifax Harbour, and that routing by ETA would mostly be correcting 
 crossings. The data does not support that.
 
 Of 92 disagreement decisions in the baseline run, only 4, or 4.3 percent, rejected a
-courier on the opposite side of the harbour, and those accounted for 6.4 percent of
-total ETA saved. The remaining 95.7 percent were same-side corrections worth 93.6
-percent of the savings. Sampling node pairs directly agrees: of the 50 highest detour
-pairs, only 6 span mid harbour, while 45.1 percent of all sampled pairs do, so
-crossing the water is if anything a negative predictor of a bad straight-line
-estimate.
+courier on the opposite side of the harbour, and those accounted for 6.36 percent of
+total ETA saved. The remaining 88 disagreements were same-side corrections worth the
+other 93.64 percent. Sampling node pairs directly agrees: of the 50 highest detour
+pairs, 10 span mid harbour, which is 20 percent, while 37.92 percent of all 1,200
+sampled pairs do, so crossing the water is if anything a negative predictor of a bad
+straight-line estimate.
+
+An earlier draft of this note reported 6 of 50 and 45.1 percent. Those came from a
+one-off script using a harbour meridian of -63.575, which was picked before the node
+longitude histogram showed the narrows sit nearer -63.560. The numbers above are from
+`benchmarks/bench_analysis.py`, which uses -63.560 and is reproducible. The conclusion
+is unchanged: crossing rate among high detour pairs, 20 percent, is below the base
+rate of 37.92 percent.
 
 The effect is real but local. The largest single case was a courier 553 m away in a
 straight line needing 493 s by road, against one 655 m away needing 69 s. That is
@@ -205,7 +220,7 @@ not a measurable system-level improvement at any configuration tested.
 Pairing on seed is more sensitive, because both strategies receive identical
 generated inputs for a given seed, and it does show a small consistent effect:
 topk-eta wins mean delivery on 4 of 5 seeds at 100 and 200 couriers, by about 20 s
-against a mean delivery near 1400 s, and on 5 of 5 at 400 couriers by 8.25 s. At 50
+against a mean delivery of 1433.7 s, and on 5 of 5 at 400 couriers by 8.25 s. At 50
 couriers it reverses and nearest wins on 4 of 5.
 
 The arithmetic explains the size. topk-eta saves a mean 57.3 s on the 9.1 percent of

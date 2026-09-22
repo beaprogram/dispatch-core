@@ -28,6 +28,7 @@ bench:
 	python -m benchmarks.bench_nearest
 	python -m benchmarks.bench_routing
 	python -m benchmarks.bench_dispatch
+	python -m benchmarks.bench_analysis
 	python -m benchmarks.make_results
 
 results:

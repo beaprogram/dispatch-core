@@ -317,6 +317,64 @@ def disagreement_section(rows: list[dict[str, str]]) -> list[str]:
     return lines
 
 
+def per_seed_section(rows: list[dict[str, str]]) -> list[str]:
+    """Per seed mean delivery at the baseline.
+
+    Included so that the effect of running a single seed is visible rather than
+    asserted: the spread across seeds is what decides whether a difference means
+    anything.
+    """
+    baseline = [r for r in rows if int(r["couriers"]) == BASELINE_COURIERS]
+    seeds = sorted({int(r["seed"]) for r in baseline})
+
+    lines = [
+        "### Per seed detail at the baseline",
+        "",
+        "Mean delivery for each seed separately. A single seed run reports whichever of",
+        "these happens to come up.",
+        "",
+        "| seed | nearest | topk-eta | difference |",
+        "| ---: | ---: | ---: | --- |",
+    ]
+    for seed in seeds:
+        values = {
+            r["strategy"]: float(r["mean_delivery_s"]) for r in baseline if int(r["seed"]) == seed
+        }
+        delta = values["nearest"] - values["topk-eta"]
+        percent = 100 * delta / values["nearest"]
+        direction = "better" if delta > 0 else "worse"
+        lines.append(
+            f"| {seed} | {values['nearest']:.1f} s | {values['topk-eta']:.1f} s "
+            f"| topk-eta {direction} by {abs(percent):.2f} % |"
+        )
+    lines.append("")
+    return lines
+
+
+def analysis_section() -> list[str]:
+    """Supporting measurements behind specific documentation claims."""
+    try:
+        rows, environment = read_csv("bench_analysis.csv")
+    except FileNotFoundError:
+        return []
+
+    lines = [
+        "## Supporting measurements",
+        "",
+        "Produced by `python -m benchmarks.bench_analysis`. These are not performance",
+        "benchmarks. Each exists so a factual claim in the README is reproducible.",
+        "",
+        *environment_block(environment),
+        "",
+        "| measurement | value | detail |",
+        "| --- | ---: | --- |",
+    ]
+    for row in rows:
+        lines.append(f"| {row['measurement']} | {row['value']} | {row['detail']} |")
+    lines.append("")
+    return lines
+
+
 def main() -> None:
     """Regenerate RESULTS.md from the CSVs on disk."""
     dispatch_rows, dispatch_environment = read_csv("bench_dispatch.csv")
@@ -337,8 +395,10 @@ def main() -> None:
         f"Seeds used: {seeds} ({len(seeds)} seeds per cell).",
         "",
         *baseline_section(dispatch_rows),
+        *per_seed_section(dispatch_rows),
         *sweep_section(dispatch_rows),
         *disagreement_section(dispatch_rows),
+        *analysis_section(),
     ]
 
     path = RESULTS_DIR / "RESULTS.md"
