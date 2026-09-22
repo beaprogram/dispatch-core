@@ -87,18 +87,47 @@ between its endpoints.
 
 ## The travel_time heuristic gets weaker as the graph gets faster (CP3)
 
-Dividing haversine by the single fastest edge speed in the graph keeps the estimate
-admissible, but how useful it is depends on the spread of speeds. Mean nodes
-expanded over 200 seeded pairs:
+`make_heuristic` estimates remaining travel time as `haversine(node, target) /
+max_edge_speed_mps(graph)`. Dividing by the fastest edge in the whole graph is what
+makes it admissible: no route can average more than the fastest road on it, so the
+estimate can never overshoot. But the same choice is what makes it loose. The
+divisor is set by the single fastest road anywhere in the graph, while most of a
+downtown network is far slower, so on slow city streets the estimate is a small
+fraction of the real time and gives the search almost no guidance.
 
-| graph | max speed | length reduction | travel_time reduction |
-| --- | --- | --- | --- |
-| fixture, 800 m | 50 kph | 69.9 percent | 64.3 percent |
-| full, 5000 m | 90 kph | 66.9 percent | 34.0 percent |
+How loose depends entirely on the spread of speeds, not on graph size:
 
-The full graph contains a 90 kph road, so every estimate is divided by 25 m/s even
-though most downtown streets run far slower. The estimate stays valid but becomes
-very optimistic, the frontier flattens toward Dijkstra, and the reduction halves.
-The length heuristic is unaffected because it has no such divisor. This is the
-admissibility against informedness tradeoff, and it is why a tighter bound such as a
-per-region speed cap would help on a graph with mixed road classes.
+| graph | median speed | max speed | max/median | edges at max speed |
+| --- | --- | --- | --- | --- |
+| fixture, 800 m | 46.8 kph | 50 kph | 1.07x | 155 of 605, 25.62 percent |
+| full, 5000 m | 41.2 kph | 90 kph | 2.19x | 1 of 8915, 0.01 percent |
+
+On the full graph a single 90 kph edge out of 8,915 sets the divisor for every
+estimate in the graph, inflating it by roughly 2.2x against the median street.
+
+The cost, as mean nodes expanded over 200 seeded source and target pairs, where
+"reduction" is `1 - (A* mean / Dijkstra mean)` and both algorithms run the same
+`_search` code differing only in heuristic:
+
+| graph | weight | A* mean | Dijkstra mean | reduction |
+| --- | --- | --- | --- | --- |
+| fixture, 800 m | length | 37.0 | 122.7 | 69.9 percent |
+| fixture, 800 m | travel_time | 43.6 | 122.1 | 64.3 percent |
+| full, 5000 m | length | 537.1 | 1623.6 | 66.9 percent |
+| full, 5000 m | travel_time | 1075.6 | 1630.4 | 34.0 percent |
+
+The length heuristic holds up across both graphs because it has no divisor: the
+straight line distance is a tight bound on road distance regardless of speed limits.
+Only travel_time degrades, and it degrades exactly where the speed spread widens.
+
+This is the admissibility against informedness tradeoff. A heuristic must stay below
+the true cost to guarantee correctness, and the cheapest way to guarantee that is a
+global bound, which is also the weakest one.
+
+Roadmap fix, not implemented here: ALT, meaning A* with landmarks and the triangle
+inequality. Pick a small set of landmark nodes, precompute the exact shortest travel
+time from every node to each landmark and back, then bound the remaining cost with
+`|d(node, L) - d(target, L)|` maximised over landmarks. That bound is admissible by
+the triangle inequality and uses real road times rather than a straight line divided
+by a global speed cap, so it stays tight on slow streets. The cost is a
+precomputation pass and O(landmarks) storage per node.
