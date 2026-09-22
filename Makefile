@@ -1,4 +1,4 @@
-.PHONY: help install lint test bench fetch fetch-fixture clean
+.PHONY: help install lint test bench results fetch fetch-fixture clean
 
 help:
 	@echo "Dispatch Core - road graph dispatch system"
@@ -7,7 +7,8 @@ help:
 	@echo "  install     Install package and dev dependencies"
 	@echo "  lint        Run ruff check and mypy"
 	@echo "  test        Run pytest with coverage"
-	@echo "  bench       Run all benchmarks"
+	@echo "  bench       Run all benchmarks and regenerate RESULTS.md"
+	@echo "  results     Regenerate RESULTS.md from existing CSVs"
 	@echo "  fetch       Download the 5000 m benchmark graph (requires internet)"
 	@echo "  fetch-fixture  Download the 800 m test fixture (requires internet)"
 	@echo "  clean       Remove build artifacts and cache"
@@ -24,7 +25,13 @@ test:
 	pytest
 
 bench:
-	python -m pytest benchmarks/ -v
+	python -m benchmarks.bench_nearest
+	python -m benchmarks.bench_routing
+	python -m benchmarks.bench_dispatch
+	python -m benchmarks.make_results
+
+results:
+	python -m benchmarks.make_results
 
 fetch:
 	python scripts/fetch_graph.py -o data/cache/halifax_5000m.graphml -r 5000

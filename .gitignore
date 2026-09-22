@@ -16,4 +16,3 @@ htmlcov/
 .env.local
 data/cache/
 cache/
-benchmarks/results/*.csv

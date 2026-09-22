@@ -157,6 +157,26 @@ def percentile(values: list[float], fraction: float) -> float:
     return ordered[min(rank, len(ordered)) - 1]
 
 
+@dataclass(frozen=True, slots=True)
+class Disagreement:
+    """A decision where topk-eta chose a different courier than straight-line nearest.
+
+    Recorded inside a single topk-eta run, so "what nearest would have picked" means
+    the closest free courier given the state topk-eta's own history produced. It is a
+    within-run counterfactual, not a replay of an independent nearest simulation.
+    """
+
+    nearest_eta_seconds: float
+    chosen_eta_seconds: float
+    nearest_straight_meters: float
+    chosen_straight_meters: float
+
+    @property
+    def eta_saved_seconds(self) -> float:
+        """Travel time avoided by not taking the straight-line nearest courier."""
+        return self.nearest_eta_seconds - self.chosen_eta_seconds
+
+
 @dataclass(slots=True)
 class SimulationResult:
     """Metrics from one completed simulation run."""
@@ -168,7 +188,9 @@ class SimulationResult:
     seed: int
     cache_hits: int
     cache_misses: int
+    decisions: int = 0
     decision_latencies_ns: list[int] = field(default_factory=list)
+    disagreements: list[Disagreement] = field(default_factory=list)
 
     @property
     def mean_wait_seconds(self) -> float:
@@ -215,6 +237,46 @@ class SimulationResult:
         total = self.cache_hits + self.cache_misses
         return self.cache_hits / total if total else 0.0
 
+    @property
+    def disagreement_rate(self) -> float:
+        """Fraction of decisions where topk-eta rejected the straight-line nearest courier.
+
+        Always 0.0 for the nearest strategy, which never considers an alternative.
+        """
+        return len(self.disagreements) / self.decisions if self.decisions else 0.0
+
+    @property
+    def mean_eta_saved_seconds(self) -> float:
+        """Mean travel time saved, averaged over disagreement decisions only.
+
+        Restricted to disagreements on purpose. Averaging over every decision would
+        dilute the effect with the majority where both strategies agree and the
+        saving is exactly zero.
+        """
+        if not self.disagreements:
+            return 0.0
+        return sum(d.eta_saved_seconds for d in self.disagreements) / len(self.disagreements)
+
+    @property
+    def mean_rejected_seconds_per_meter(self) -> float:
+        """Road seconds per straight-line meter for the rejected nearest courier.
+
+        A high value means the straight line badly understates the real route, which
+        is what a water crossing or other barrier looks like in this metric.
+        """
+        usable = [d for d in self.disagreements if d.nearest_straight_meters > 0]
+        if not usable:
+            return 0.0
+        return sum(d.nearest_eta_seconds / d.nearest_straight_meters for d in usable) / len(usable)
+
+    @property
+    def mean_chosen_seconds_per_meter(self) -> float:
+        """Road seconds per straight-line meter for the courier topk-eta chose."""
+        usable = [d for d in self.disagreements if d.chosen_straight_meters > 0]
+        if not usable:
+            return 0.0
+        return sum(d.chosen_eta_seconds / d.chosen_straight_meters for d in usable) / len(usable)
+
 
 class Dispatcher:
     """Assigns orders to couriers over a discrete-event simulation.
@@ -245,6 +307,7 @@ class Dispatcher:
         self.top_k = top_k
         self.cache = RouteCache(cache_size)
         self._courier_nodes: dict[int, NodeId] = {}
+        self._disagreements: list[Disagreement] = []
 
         latitudes = [data["y"] for _, data in graph.nodes(data=True)]
         longitudes = [data["x"] for _, data in graph.nodes(data=True)]
@@ -285,15 +348,33 @@ class Dispatcher:
 
         candidates = free.k_nearest(x, y, self.top_k)
         assert candidates
-        best_id = int(candidates[0].id)
+
+        # candidates[0] is the straight-line nearest, which is exactly what the
+        # nearest strategy would have returned from the same quadtree state.
+        straight_nearest = candidates[0]
+        best = candidates[0]
         best_eta = math.inf
+        etas: dict[int, float] = {}
+
         for candidate in candidates:
-            courier_node = self._courier_nodes[int(candidate.id)]
-            eta = self.travel_time(courier_node, pickup)
+            eta = self.travel_time(self._courier_nodes[int(candidate.id)], pickup)
+            etas[int(candidate.id)] = eta
             if eta < best_eta:
                 best_eta = eta
-                best_id = int(candidate.id)
-        return best_id
+                best = candidate
+
+        if best.id != straight_nearest.id:
+            self._disagreements.append(
+                Disagreement(
+                    nearest_eta_seconds=etas[int(straight_nearest.id)],
+                    chosen_eta_seconds=best_eta,
+                    nearest_straight_meters=math.hypot(
+                        straight_nearest.x - x, straight_nearest.y - y
+                    ),
+                    chosen_straight_meters=math.hypot(best.x - x, best.y - y),
+                )
+            )
+        return int(best.id)
 
     def run(
         self, orders: list[Order], courier_start_nodes: dict[int, NodeId], seed: int
@@ -307,6 +388,7 @@ class Dispatcher:
         Time complexity: O(orders * (quadtree query + routing)) with routing cached.
         """
         self._courier_nodes = dict(courier_start_nodes)
+        self._disagreements = []
 
         free = Quadtree(self._bounds)
         for courier_id, node in courier_start_nodes.items():
@@ -392,5 +474,7 @@ class Dispatcher:
             seed=seed,
             cache_hits=self.cache.hits,
             cache_misses=self.cache.misses,
+            decisions=len(assignments),
             decision_latencies_ns=latencies,
+            disagreements=list(self._disagreements),
         )

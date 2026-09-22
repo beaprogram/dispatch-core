@@ -174,3 +174,69 @@ where the repeats come from.
 So the cache hit rate should be reported per strategy, never as a single headline
 number for the system. A cache that does nothing for the default strategy is worth
 stating plainly rather than hiding behind an average across both.
+
+## The harbour hypothesis was wrong (CP5)
+
+The expectation was that straight-line nearest would repeatedly pick couriers on the
+far side of Halifax Harbour, and that routing by ETA would mostly be correcting water
+crossings. The data does not support that.
+
+Of 92 disagreement decisions in the baseline run, only 4, or 4.3 percent, rejected a
+courier on the opposite side of the harbour, and those accounted for 6.4 percent of
+total ETA saved. The remaining 95.7 percent were same-side corrections worth 93.6
+percent of the savings. Sampling node pairs directly agrees: of the 50 highest detour
+pairs, only 6 span mid harbour, while 45.1 percent of all sampled pairs do, so
+crossing the water is if anything a negative predictor of a bad straight-line
+estimate.
+
+The effect is real but local. The largest single case was a courier 553 m away in a
+straight line needing 493 s by road, against one 655 m away needing 69 s. That is
+one-way systems, divided roads, and loop-backs, not water. A long harbour crossing
+has a big absolute detour but a modest ratio, because the bridge route is roughly
+proportional to the distance; a 400 m trip that needs a 2 km loop is far worse
+proportionally.
+
+## The strategies do not differ by more than seed noise (CP5)
+
+Across 4 courier counts, 5 metrics, and 5 seeds, not one comparison between nearest
+and topk-eta produced non-overlapping per seed ranges. Reported honestly, topk-eta is
+not a measurable system-level improvement at any configuration tested.
+
+Pairing on seed is more sensitive, because both strategies receive identical
+generated inputs for a given seed, and it does show a small consistent effect:
+topk-eta wins mean delivery on 4 of 5 seeds at 100 and 200 couriers, by about 20 s
+against a mean delivery near 1400 s, and on 5 of 5 at 400 couriers by 8.25 s. At 50
+couriers it reverses and nearest wins on 4 of 5.
+
+The arithmetic explains the size. topk-eta saves a mean 57.3 s on the 9.1 percent of
+decisions where it disagrees, which is about 5 s per order overall, against a seed to
+seed spread in mean delivery of roughly 200 s. The local effect is genuine and
+measurable; the system-level effect is buried by variance in the order stream.
+
+The disagreement rate rises sharply with fleet size: 1.06 percent at 50 couriers,
+3.44 at 100, 9.10 at 200, 32.22 at 400. With more free couriers the k nearest
+candidates are genuinely competitive, so there is more for a smarter rule to choose
+between. But that is also the regime where nothing queues and every order is on time,
+so the better choice has nothing left to improve.
+
+## networkx Dijkstra is faster than this repo's Dijkstra (CP5)
+
+Measured on 200 seeded pairs on the full graph, median of 5 repeats:
+
+| weight | A* | this Dijkstra | networkx Dijkstra |
+| --- | --- | --- | --- |
+| length | 269.92 ms | 576.24 ms | 364.15 ms |
+| travel_time | 522.84 ms | 627.64 ms | 378.35 ms |
+
+networkx beats the hand written Dijkstra on both weights, and beats the hand written
+A* on travel_time. A* only wins on length, where the heuristic cuts mean expansions
+from 1623.6 to 537.1, roughly threefold, which is enough to overcome the constant
+factor. On travel_time the weaker heuristic cuts expansions only to 1075.6 and the
+constant factor wins.
+
+This is a constant factor gap, not an algorithmic one: this implementation walks
+networkx adjacency dictionaries and takes a minimum over parallel edges inside the
+inner loop, while networkx routes over its own optimised structures. Converting the
+graph once into flat adjacency lists with the parallel edge minimum precomputed would
+close most of it without changing the algorithm. It is deliberately not done here, so
+the reported numbers describe the code as written.

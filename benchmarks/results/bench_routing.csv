@@ -1,0 +1,12 @@
+# cpu: Apple M4
+# machine: arm64
+# os: Darwin 27.0.0
+# python: 3.14.0
+# run_date: 2026-09-22 16:28 UTC
+graph,weight,algorithm,pairs,median_ms,p95_ms,median_ms_per_pair,median_nodes_expanded,mean_nodes_expanded
+full_5000m,length,astar,200,269.9167,272.5857,1.34958,398.5,537.1
+full_5000m,length,dijkstra,200,576.2382,583.1192,2.88119,1590.0,1623.6
+full_5000m,length,networkx_dijkstra,200,364.1466,368.9002,1.82073,,
+full_5000m,travel_time,astar,200,522.8433,536.595,2.61422,875.5,1075.6
+full_5000m,travel_time,dijkstra,200,627.6366,669.6002,3.13818,1596.0,1630.4
+full_5000m,travel_time,networkx_dijkstra,200,378.3494,381.849,1.89175,,
