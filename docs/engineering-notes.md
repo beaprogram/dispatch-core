@@ -131,3 +131,46 @@ time from every node to each landmark and back, then bound the remaining cost wi
 the triangle inequality and uses real road times rather than a straight line divided
 by a global speed cap, so it stays tight on slow streets. The cost is a
 precomputation pass and O(landmarks) storage per node.
+
+## The default arrival rate has to create contention or the queue is never tested (CP4)
+
+The first default arrival rate was an arbitrary 12 orders per minute. On the full
+graph with 200 couriers that produced mean wait 0.0 s and p95 wait 0.0 s: a courier
+was always free, so no order ever entered the pending heap and the priority queue,
+one of the core data structures here, was never exercised at all. Every metric still
+looked fine, which is what made it easy to miss.
+
+Little's law explains it. With a mean delivery of roughly 12 minutes, 200 couriers
+saturate at about 200 / 12, near 16.7 orders per minute, so 12 per minute leaves
+real slack. Measured sweep on the full graph, 1000 orders, seed 42, nearest:
+
+| orders/min | mean wait | p95 wait | mean delivery | on time |
+| --- | --- | --- | --- | --- |
+| 12 | 0.0 s | 0.0 s | 723.2 s | 100.0 percent |
+| 18 | 403.6 s | 1201.1 s | 1404.6 s | 97.5 percent |
+| 24 | 801.2 s | 2022.8 s | 1825.5 s | 80.5 percent |
+| 30 | 1013.5 s | 2522.2 s | 2034.1 s | 70.1 percent |
+| 40 | 1217.2 s | 2877.8 s | 2244.0 s | 62.7 percent |
+| 60 | 1446.4 s | 3369.9 s | 2475.2 s | 56.1 percent |
+
+The default is now 18 per minute, just past saturation, where the queue is genuinely
+used and on time percentage is neither a trivial 100 nor a collapse.
+
+## The route cache only helps one of the two strategies (CP4)
+
+Measured on the default run, full graph, 1000 orders, 200 couriers, seed 42:
+
+| strategy | cache hits | cache misses | hit rate |
+| --- | --- | --- | --- |
+| nearest | 0 | 1994 | 0.00 percent |
+| topk-eta | 1019 | 3067 | 24.94 percent |
+
+`nearest` issues exactly two routes per order, courier to pickup and pickup to
+dropoff, and both endpoints are drawn uniformly from 3505 nodes, so a repeated node
+pair is close to impossible and the cache never hits. `topk-eta` routes k of 5
+candidates per decision, and candidate couriers recur across nearby pickups, which is
+where the repeats come from.
+
+So the cache hit rate should be reported per strategy, never as a single headline
+number for the system. A cache that does nothing for the default strategy is worth
+stating plainly rather than hiding behind an average across both.
