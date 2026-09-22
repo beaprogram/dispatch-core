@@ -63,3 +63,42 @@ different reason. Every box holding ring points also extends toward the query, s
 its lower bound is below the best distance found and no box can be discarded.
 Measured on a ring of 8,000 points, one nearest query checked 7,998 of them, 100
 percent of n.
+
+## Heuristic consistency holds exactly, no scaling needed (CP3)
+
+The concern was that osmnx might round lengths or travel times enough to break
+h(u) <= w(u, v) + h(v) by a small margin. It does not. `add_edge_travel_times`
+computes `length / speed` with no rounding, and osmnx's `EARTH_RADIUS_M` is 6371009
+against the 6371008.8 used in `geo.py`, so osmnx edge lengths are if anything
+fractionally larger than this repo's haversine, which is the safe direction.
+
+Measured worst slack, `w(u, v) + h(v) - h(u)` over every edge for 25 sampled
+targets, where negative would be a violation:
+
+| graph | length | travel_time |
+| --- | --- | --- |
+| fixture, 800 m | +1.160e-07 | +5.015e-08 |
+| full, 5000 m | +3.091e-07 | +4.631e-02 |
+
+All positive, so no scale factor was applied. The condition reduces to
+`haversine(u, v) <= length(u, v)` on every edge, which held on all 605 fixture
+edges with zero violations, because a road cannot be shorter than the straight line
+between its endpoints.
+
+## The travel_time heuristic gets weaker as the graph gets faster (CP3)
+
+Dividing haversine by the single fastest edge speed in the graph keeps the estimate
+admissible, but how useful it is depends on the spread of speeds. Mean nodes
+expanded over 200 seeded pairs:
+
+| graph | max speed | length reduction | travel_time reduction |
+| --- | --- | --- | --- |
+| fixture, 800 m | 50 kph | 69.9 percent | 64.3 percent |
+| full, 5000 m | 90 kph | 66.9 percent | 34.0 percent |
+
+The full graph contains a 90 kph road, so every estimate is divided by 25 m/s even
+though most downtown streets run far slower. The estimate stays valid but becomes
+very optimistic, the frontier flattens toward Dijkstra, and the reduction halves.
+The length heuristic is unaffected because it has no such divisor. This is the
+admissibility against informedness tradeoff, and it is why a tighter bound such as a
+per-region speed cap would help on a graph with mixed road classes.
